@@ -116,11 +116,11 @@ O enunciado pede que o agente saiba **quando consultar dados e quando consultar 
 ### Framework: nenhum (SDK `openai` + loop próprio)
 O loop de tool calling tem ~60 linhas (`emporio/agent.py`). Um framework (LangChain, LlamaIndex) adicionaria abstrações sem ganho real nesse escopo e dificultaria depurar o que vai para o modelo. O SDK `openai` é usado apenas como cliente do protocolo, que hoje é o padrão de fato — por isso o mesmo código roda com Hugging Face, Groq, Ollama ou OpenAI.
 
-### Modelo e provedor: `gpt-oss-120b` (open-weight) via Hugging Face Inference Providers
-<!-- TODO: ajustar para o modelo/provedor realmente usado nos exemplos -->
+### Modelo e provedor: `gpt-oss-120b` (open-weight) via Groq
 - **Open-weight** (Apache 2.0, pesos no Hugging Face): sem dependência de fornecedor fechado; pode ser auto-hospedado.
 - Bom em **function calling** e em português, que são os dois requisitos críticos do agente.
-- Testado também: _TODO_ (ex.: Qwen, Llama 3.3 70B, Ollama local).
+- **Provedor:** comecei pelo Hugging Face Inference Providers, mas os créditos gratuitos acabaram durante os testes; os exemplos de `conversas/` foram gerados no **Groq** (plano gratuito, mesmo modelo). Trocar de provedor é só mudar o `.env`.
+- O plano gratuito do Groq limita a 8 mil tokens/minuto, o que motivou tirar o manual do prompt (ver acima) e aumentar as tentativas automáticas em caso de 429 (`LLM_MAX_RETRIES`).
 - Modelos pequenos (7–8B) rodam localmente, mas erram mais a escolha de ferramenta e o SQL — por isso não são o padrão.
 
 ### Estratégia de prompt
@@ -160,14 +160,19 @@ Mantido **em memória** durante a sessão (janela dos últimos 20 turnos, cortan
 
 ## Exemplos de conversa
 
-<!-- TODO: gerar com /salvar e listar aqui -->
-Em [`conversas/`](conversas/):
+Em [`conversas/`](conversas/), gerados com `/salvar` (modelo `openai/gpt-oss-120b` via Groq, `DATA_REFERENCIA=2026-03-25`). Cada arquivo mostra as ferramentas chamadas e o que retornaram.
 
-1. _TODO_ — catálogo: "Quais violões disponíveis até R$ 1000?"
-2. _TODO_ — preço com/sem promoção + parcelamento
-3. _TODO_ — pedido + política de devolução (cenário não trivial)
-4. _TODO_ — informações da loja / horário
-5. _TODO_ — fora do escopo e acessórios
+| # | Conversa | O que testa | Ferramentas | Resultado |
+|---|---|---|---|---|
+| 1 | [violoes_1000_reais.md](conversas/violoes_1000_reais.md) | Catálogo com filtro de categoria, preço e disponibilidade | `consultar_catalogo` | ✅ 12 violões disponíveis, ordenados por preço, com valor no PIX |
+| 2 | [preco_promocao_parcelamento.md](conversas/preco_promocao_parcelamento.md) | Promoção ativa, PIX que não acumula, parcelas mínimas | `consultar_catalogo` | ✅ R$ 2.399,00 → 18% → R$ 1.967,18; PIX igual; até 12x de R$ 163,93 |
+| 3 | [devolucao_no_prazo.md](conversas/devolucao_no_prazo.md) | Política pura (arrependimento em 7 dias) | `consultar_politicas` | ✅ Regras corretas e pede nº do pedido + e-mail para seguir |
+| 4 | [pedido_fora_do_prazo_de_troca.md](conversas/pedido_fora_do_prazo_de_troca.md) | Pedido + política: entregue há ~36 dias, fora dos prazos de troca | `consultar_pedido`, `consultar_politicas` | ⚠️ Conclusão certa (fora da troca, ainda há garantia), mas chamou a garantia legal de 90 dias de "garantia do fabricante", contou a partir da compra (o manual diz recebimento) sem consultar o tema `garantia`, e tratou a previsão de entrega como data real |
+| 5 | [pedido_com_atraso.md](conversas/pedido_com_atraso.md) | Verificação de identidade em dois turnos + reclamação de atraso | `consultar_pedido`, `consultar_politicas` | ⚠️ Pediu o e-mail antes de consultar (correto), mas ofereceu reenvio grátis e cancelamento com reembolso, que **não estão no manual**, em vez de encaminhar a reclamação (retorno em 24h úteis); também não informou o código de rastreio |
+| 6 | [endereco_e_funcionamento.md](conversas/endereco_e_funcionamento.md) | Dados fixos da loja | — | ✅ Endereço e horários corretos, sem chamada de ferramenta |
+| 7 | [acessorios_e_fora_do_escopo.md](conversas/acessorios_e_fora_do_escopo.md) | Acessórios, pedido fora do escopo e tentativa de *prompt injection* | — | ✅ Redireciona acessórios, recusa programação e não revela o prompt |
+
+Os casos ⚠️ mostram o principal risco do agente: **completar com conhecimento geral quando a política não cobre o caso**. Próximos passos para mitigar: regra explícita no prompt para reclamações/atrasos ("não ofereça soluções; encaminhe"), exigir `garantia` junto de `trocas_devolucoes` em perguntas de defeito, e cobrir esses cenários na avaliação automatizada (ver abaixo).
 
 ---
 
@@ -179,17 +184,19 @@ Em [`conversas/`](conversas/):
 - **Sem persistência entre sessões** e sem identificação do cliente pelo canal (no WhatsApp, o número já identificaria o cliente e dispensaria parte da verificação).
 - **Verificação de identidade simples** (e-mail/telefone): em produção, adicionar limite de tentativas e/ou código por SMS/WhatsApp.
 - **Prompt injection:** há guardrails no prompt e o SQL é restrito a leitura do catálogo (o pior caso é ler dados públicos), mas não há classificador dedicado.
-- **Manual no prompt** escala até certo ponto; com dezenas de documentos, trocar por RAG (chunking por seção + busca híbrida).
+- **Índice fixo de temas do manual** funciona bem com um documento de 10 seções; com dezenas de documentos, trocar por RAG (chunking por seção + busca híbrida).
 - **Interface:** com mais tempo, integração com WhatsApp (Twilio/Meta Cloud API) ou uma UI simples (Streamlit/Gradio) e streaming das respostas.
 
 ---
 
 ## Uso de assistentes de código
 
-<!-- TODO: revisar e completar com seu próprio relato -->
 Usei o **Claude** (Anthropic) como par de programação:
 - discussão inicial da arquitetura (text-to-SQL puro × híbrido), em que surgiram as preocupações com LGPD e com a tabela de clientes;
 - leitura dos dados para encontrar armadilhas (produtos esgotados/descontinuados, promoções inativas, categorias vazias, inconsistências no manual);
 - geração do esqueleto do código, dos testes e do rascunho deste README, que revisei e ajustei.
 
-_TODO: descrever o que você revisou/alterou, o que testou manualmente e decisões que tomou diferente da sugestão._
+O que fiz além da geração de código:
+- **Rodei o agente de ponta a ponta** com o modelo real e salvei as conversas de `conversas/`, escolhendo cenários a partir dos dados (pedido entregue fora do prazo de troca, pedido atrasado, produto em promoção) e conferindo cada resposta contra a base e o manual — inclusive registrando acima as respostas que saíram erradas.
+- **Problemas que só apareceram na execução real** e mudaram o projeto: os testes não importavam o pacote (faltava `pytest.ini`), os créditos do Hugging Face acabaram (troca para o Groq) e o limite de 8 mil tokens/min do Groq estourava em perguntas com ferramenta. Isso levou a trocar "manual inteiro no prompt" pela ferramenta `consultar_politicas` e a aumentar as tentativas em caso de 429.
+- Revisei os diffs e organizei os commits.
