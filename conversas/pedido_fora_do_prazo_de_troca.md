@@ -22,7 +22,8 @@ Resultado:
 ```json
 {
   "temas": [
-    "trocas_devolucoes"
+    "trocas_devolucoes",
+    "garantia"
   ]
 }
 ```
@@ -33,13 +34,16 @@ Resultado:
 
 </details>
 
-**Lia:** Oi Letícia, tudo bem? 😊
+**Lia:** Oi Letícia, tudo bem? Recebi seu pedido de devolução do ukulele Shelby SU‑21S porque o som está estranho. 🙁
 
-Pelo que vejo, seu pedido #7 foi entregue em 17/02/2026. O prazo para troca por defeito, segundo a nossa política, é de até **30 dias corridos a partir da data da compra** (03/02/2026). Como já se passaram 50 dias, infelizmente o período de troca por defeito expirou.
+Pelo nosso registro o pedido foi entregue há **36 dias** (não temos a data exata de recebimento, mas usamos a previsão).  
 
-Mas não se preocupe: você ainda pode acionar a **garantia do fabricante** (90 dias a partir da compra). Podemos intermediar esse processo para você, enviando as instruções e, se necessário, ajudando a organizar a coleta do produto.
+- **Troca por defeito**: o prazo é de até **30 dias** corridos após a compra. Como já passou esse período, a troca direta na loja não se aplica.  
+- **Garantia legal**: você ainda tem **90 dias** de garantia contra defeitos de fabricação. Podemos abrir um chamado de garantia com o fabricante para que o problema seja resolvido (reparo ou substituição).
 
-Para avançarmos, poderia me enviar algumas fotos ou um vídeo mostrando o problema no som? Assim conseguimos orientar o fabricante da melhor forma.
+Para avançarmos, preciso que você confirme se o ukulele está com a embalagem original e se tem o certificado de garantia. Assim encaminho seu caso ao time responsável; eles entrarão em contato em até 24 horas úteis.
+
+A loja está fechada agora (horário de atendimento: 9h‑18h), mas já deixei seu pedido registrado e a equipe vai te atender assim que abrir.
 
 Posso ajudar em mais alguma coisa?
 

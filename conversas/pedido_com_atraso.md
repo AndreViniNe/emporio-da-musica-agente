@@ -2,13 +2,7 @@
 
 _Modelo: `openai/gpt-oss-120b`_
 
-**Cliente:** Sou Ana Carol, fiz um pedido que está em atraso. É o pedido 8
-
-**Lia:** Oi Ana Carol, tudo bem? Para eu verificar o status do seu pedido 8 e entender o que aconteceu com a entrega, preciso confirmar o e‑mail ou o telefone cadastrado no pedido. Você pode me informar um desses dados? 😊
-
----
-
-**Cliente:** anacarol.ferreira@coldmail.com
+**Cliente:** Sou Ana Carol, fiz um pedido que está em atraso. É o pedido 8 e meu email é anacarol.ferreira@coldmail.com
 
 <details><summary>Consultas feitas pelo agente</summary>
 
@@ -28,8 +22,7 @@ Resultado:
 ```json
 {
   "temas": [
-    "frete_entregas",
-    "trocas_devolucoes"
+    "frete_entregas"
   ]
 }
 ```
@@ -40,14 +33,10 @@ Resultado:
 
 </details>
 
-**Lia:** Oi Ana, tudo bem? 🙁 Vi que seu pedido 8 (Kala KA‑C Concert Mogno) foi despachado, mas a previsão de entrega era para 28/02/2026 e já se passaram 25 dias sem que o produto chegue.
+**Lia:** Oi Ana Carol, tudo bem? 😔 Seu pedido #8 (Kala KA‑C Concert Mogno) já foi despachado e está a caminho, mas a entrega está atrasada – a previsão era para 28/02/2026 e já se passaram 25 dias.
 
-Segundo nossa política de frete, o prazo para entregas em outras cidades (via Correios ou Jadlog) é de 5 a 12 dias úteis. Como o prazo já foi ultrapassado, podemos:
+O código de rastreamento é **BRJL5544332BR**. Vou encaminhar sua reclamação para a equipe responsável e eles entram em contato em até 24 horas úteis para resolver o atraso.
 
-1. **Abrir uma solicitação de rastreamento** junto à transportadora para entender onde está o pacote e acelerar a entrega;  
-2. **Reenviar o produto** sem custo adicional, caso o item tenha sido extraviado;  
-3. **Cancelar o pedido e gerar o reembolso** na mesma forma de pagamento (cartão de débito), conforme a política de trocas e devoluções.
-
-Me avisa qual alternativa você prefere ou se deseja que eu verifique o rastreio agora. Posso ajudar em mais alguma coisa?
+Posso ajudar em mais alguma coisa?
 
 ---
