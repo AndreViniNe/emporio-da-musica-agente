@@ -27,6 +27,7 @@ class Settings:
     model: str
     temperature: float
     data_referencia: date | None
+    max_retries: int = 6
 
 
 def get_settings() -> Settings:
@@ -37,6 +38,7 @@ def get_settings() -> Settings:
         model=os.getenv("LLM_MODEL", "openai/gpt-oss-120b"),
         temperature=float(os.getenv("LLM_TEMPERATURE", "0.2")),
         data_referencia=date.fromisoformat(data_ref) if data_ref else None,
+        max_retries=int(os.getenv("LLM_MAX_RETRIES", "6")),
     )
 
 

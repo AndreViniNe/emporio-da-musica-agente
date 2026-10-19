@@ -37,7 +37,13 @@ class Turno:
 class AgenteAtendimento:
     def __init__(self, settings: Settings, client: OpenAI | None = None):
         self.settings = settings
-        self.client = client or OpenAI(base_url=settings.base_url, api_key=settings.api_key or "sem-chave")
+        self.client = client or OpenAI(
+            base_url=settings.base_url,
+            api_key=settings.api_key or "sem-chave",
+            # O SDK já refaz chamadas com 429/5xx com backoff exponencial (respeitando retry-after);
+            # planos gratuitos (ex.: Groq, 8k tokens/min) estouram o limite com o padrão de 2 tentativas.
+            max_retries=settings.max_retries,
+        )
         self.conn = criar_conexao()
         self.executar_ferramenta = criar_executor(
             self.conn, hoje=lambda: agora_loja(settings.data_referencia).date()

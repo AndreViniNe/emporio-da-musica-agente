@@ -2,9 +2,8 @@
 
 - consultar_catalogo: text-to-SQL restrito (somente SELECT nas views `catalogo` e `categorias`).
 - consultar_pedido: função fixa com verificação de identidade (nº do pedido + e-mail/telefone).
-
-As políticas da loja NÃO são uma ferramenta: o manual é curto (~3 mil tokens) e vai
-inteiro no system prompt (ver prompts.py).
+- consultar_politicas: devolve seções inteiras do manual por tema (sem embeddings: o manual tem
+  10 seções bem delimitadas, então um índice fixo é mais previsível que busca semântica).
 """
 from __future__ import annotations
 
@@ -12,8 +11,10 @@ import json
 import re
 import sqlite3
 from datetime import date
+from functools import cache
 from typing import Any, Callable
 
+from .config import POLITICAS_PATH
 from .database import normalizar
 
 MAX_LINHAS = 25
@@ -181,6 +182,49 @@ def consultar_pedido(
 
 
 # --------------------------------------------------------------------------- #
+# consultar_politicas
+# --------------------------------------------------------------------------- #
+# tema -> (nº da seção "## N." no manual, o que ela cobre). A descrição vai para o schema da tool.
+TEMAS_POLITICA: dict[str, tuple[int, str]] = {
+    "empresa": (1, "sobre a loja, missão, dados cadastrais (CNPJ, razão social), o que a loja vende"),
+    "horario": (2, "horário de funcionamento, feriados, datas especiais"),
+    "pagamento": (3, "formas de pagamento, desconto PIX, parcelamento, combinar formas de pagamento"),
+    "trocas_devolucoes": (4, "arrependimento (7 dias), troca por defeito, troca por preferência, itens não elegíveis, reembolso"),
+    "frete_entregas": (5, "frete em Campo Grande e outras cidades, prazos, transportadoras, seguro, avaria, rastreio"),
+    "promocoes": (6, "campanhas do ano (Black Friday etc.), cumulatividade, rain check"),
+    "atendimento": (7, "diretrizes do WhatsApp, fluxo de atendimento, produto esgotado/descontinuado, reclamações"),
+    "garantia": (8, "garantia legal (90 dias), garantia do fabricante, o que não é coberto"),
+    "privacidade": (9, "LGPD, uso e exclusão de dados pessoais"),
+    "disposicoes_finais": (10, "uso do manual, quando consultar a gerência"),
+}
+
+
+@cache
+def _secoes_manual() -> dict[int, str]:
+    """Divide o manual nos blocos de nível "## N. Título" (cada um inclui suas subseções)."""
+    secoes: dict[int, str] = {}
+    atual: int | None = None
+    for linha in POLITICAS_PATH.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^## (\d+)\.", linha)
+        if m:
+            atual = int(m.group(1))
+            secoes[atual] = ""
+        if atual is not None:
+            secoes[atual] += linha + "\n"
+    return {n: texto.strip() for n, texto in secoes.items()}
+
+
+def consultar_politicas(temas: list[str]) -> dict[str, Any]:
+    if isinstance(temas, str):
+        temas = [temas]
+    validos = [t for t in dict.fromkeys(temas or []) if t in TEMAS_POLITICA]
+    if not validos:
+        return {"erro": f"Tema inválido. Use um ou mais de: {', '.join(TEMAS_POLITICA)}."}
+    secoes = _secoes_manual()
+    return {"secoes": [{"tema": t, "texto": secoes[TEMAS_POLITICA[t][0]]} for t in validos]}
+
+
+# --------------------------------------------------------------------------- #
 # Definições para o LLM (formato OpenAI tools)
 # --------------------------------------------------------------------------- #
 DESCRICAO_CATALOGO = """Executa UMA consulta SQL (SQLite, somente SELECT) no catálogo da loja.
@@ -217,6 +261,12 @@ DESCRICAO_PEDIDO = """Consulta status, itens, rastreio e previsão de entrega de
 Exige o número do pedido E o e-mail ou telefone cadastrado do cliente (verificação de identidade).
 Se o cliente não informou os dois, peça antes de chamar."""
 
+DESCRICAO_POLITICAS = """Retorna o texto oficial de seções do Manual de Políticas da loja.
+Use ANTES de responder qualquer dúvida sobre regras da loja (trocas, devoluções, frete, garantia, pagamento, parcelamento, promoções, privacidade etc.). Peça todos os temas necessários numa única chamada.
+
+Temas:
+""" + "\n".join(f"- {tema}: {desc}" for tema, (_, desc) in TEMAS_POLITICA.items())
+
 TOOLS_SCHEMA: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -248,6 +298,24 @@ TOOLS_SCHEMA: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_politicas",
+            "description": DESCRICAO_POLITICAS,
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "temas": {
+                        "type": "array",
+                        "items": {"type": "string", "enum": list(TEMAS_POLITICA)},
+                        "description": "Um ou mais temas do manual.",
+                    },
+                },
+                "required": ["temas"],
+            },
+        },
+    },
 ]
 
 
@@ -266,6 +334,8 @@ def criar_executor(conn: sqlite3.Connection, hoje: Callable[[], date]) -> Callab
                 resultado = consultar_pedido(
                     conn, args.get("numero_pedido"), args.get("email_ou_telefone", ""), hoje()
                 )
+            elif nome == "consultar_politicas":
+                resultado = consultar_politicas(args.get("temas", []))
             else:
                 resultado = {"erro": f"Ferramenta desconhecida: {nome}"}
         except Exception as exc:  # nunca derrubar a conversa por erro de ferramenta

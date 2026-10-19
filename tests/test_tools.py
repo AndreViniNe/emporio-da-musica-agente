@@ -4,7 +4,7 @@ from datetime import date
 import pytest
 
 from emporio.database import criar_conexao
-from emporio.tools import consultar_catalogo, consultar_pedido
+from emporio.tools import TEMAS_POLITICA, consultar_catalogo, consultar_pedido, consultar_politicas
 
 HOJE = date(2026, 3, 25)
 
@@ -85,3 +85,20 @@ def test_pedido_inexistente_mesma_mensagem(conn):
 def test_consulta_infinita_e_abortada(conn):
     r = consultar_catalogo(conn, "WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM n) SELECT count(*) FROM n")
     assert "erro" in r
+
+
+def test_politicas_todos_os_temas_existem_no_manual():
+    for tema in TEMAS_POLITICA:
+        assert consultar_politicas([tema])["secoes"][0]["texto"].startswith("## ")
+
+
+def test_politicas_varios_temas_e_secao_completa():
+    r = consultar_politicas(["trocas_devolucoes", "garantia", "trocas_devolucoes"])
+    assert [s["tema"] for s in r["secoes"]] == ["trocas_devolucoes", "garantia"]
+    trocas = r["secoes"][0]["texto"]
+    assert "Direito de Arrependimento" in trocas and "Itens Não Elegíveis" in trocas
+    assert "## 5." not in trocas  # não vaza a seção seguinte
+
+
+def test_politicas_tema_invalido():
+    assert "erro" in consultar_politicas(["inexistente"])

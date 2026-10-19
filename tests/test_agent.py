@@ -47,6 +47,7 @@ def test_loop_com_ferramenta():
     assert "Consultas feitas pelo agente" in agente.exportar_markdown()
 
 
-def test_system_prompt_inclui_manual_e_horario():
+def test_system_prompt_roteia_politicas_para_ferramenta():
     prompt = montar_system_prompt(agora_loja())
-    assert "Direito de Arrependimento" in prompt and "A loja está" in prompt
+    assert "A loja está" in prompt and "consultar_politicas" in prompt
+    assert "Direito de Arrependimento" not in prompt  # o manual não vai mais inteiro no prompt

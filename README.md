@@ -65,15 +65,15 @@ Os testes cobrem as ferramentas (busca, preços, bloqueios de SQL, verificação
 
 ```
 Cliente ──► CLI (main.py) ──► AgenteAtendimento (emporio/agent.py)
-                                  │  system prompt = persona + regras + manual de políticas completo
+                                  │  system prompt = persona + regras + contato/horário
                                   │  + data/hora atual e se a loja está aberta (calculado em código)
                                   ▼
                            LLM (API compatível OpenAI, function calling)
-                              │                         │
-               consultar_catalogo(sql)        consultar_pedido(nº, e-mail/telefone)
-               text-to-SQL restrito            função fixa, com verificação de identidade
-                              │                         │
-                              └──── SQLite em memória (carregado dos CSVs) ────┘
+                              │                         │                          │
+               consultar_catalogo(sql)        consultar_pedido(nº, e-mail/tel.)   consultar_politicas(temas)
+               text-to-SQL restrito            função fixa, verifica identidade    seções do manual por tema
+                              │                         │                          │
+                              └── SQLite em memória (carregado dos CSVs) ──┘     data/politicas_da_loja.md
                                     views: catalogo, categorias
 ```
 
@@ -82,7 +82,7 @@ emporio/
   config.py     # .env, fuso de Campo Grande, data de referência
   database.py   # CSV → SQLite em memória + views para o LLM
   tools.py      # ferramentas + schema de function calling + allow-list do SQL
-  prompts.py    # persona, regras de roteamento/escopo, manual
+  prompts.py    # persona, regras de roteamento/escopo
   agent.py      # loop de tool calling, histórico, exportação das conversas
 main.py         # CLI
 data/           # CSVs e PDF originais + politicas_da_loja.md (versão tratada do PDF)
@@ -94,13 +94,13 @@ tests/
 
 ## Decisões técnicas
 
-### Abordagem: híbrido — políticas no prompt + function calling (text-to-SQL restrito + função de pedidos)
+### Abordagem: function calling com três ferramentas (políticas por tema + text-to-SQL restrito + função de pedidos)
 
 O enunciado pede que o agente saiba **quando consultar dados e quando consultar políticas**. Cada fonte recebeu o mecanismo mais simples que resolve bem:
 
 | Fonte | Mecanismo | Por quê |
 |---|---|---|
-| Manual de políticas (8 páginas, ~3 mil tokens) | **Inteiro no system prompt** | Documento pequeno e estável. RAG com embeddings adicionaria infraestrutura e risco de *recuperar o trecho errado* (ex.: a regra de PIX está em duas seções). Com o manual inteiro, o modelo sempre vê todas as regras. RAG passa a valer a pena se o manual crescer muito. |
+| Manual de políticas (8 páginas, 10 seções) | **Ferramenta `consultar_politicas(temas)`**: devolve seções inteiras do manual a partir de um índice fixo de temas | A primeira versão mandava o manual inteiro no system prompt, mas isso dobrava o tamanho de *toda* chamada ao LLM (~19 mil caracteres com as ferramentas) e estourava o limite de tokens/minuto de planos gratuitos (Groq: 8 mil TPM) já na segunda chamada de uma pergunta. Com a ferramenta, cada chamada leva cerca de metade. Não usei RAG com embeddings: o manual tem seções bem delimitadas, então um índice fixo é mais previsível e não tem risco de *recuperar o trecho errado*; o modelo pode pedir vários temas numa chamada só. As regras aplicadas o tempo todo (PIX não acumula com promoção, parcelas mínimas, contato e horário) continuam no prompt, então não dependem de o modelo lembrar de consultar. |
 | Catálogo (produtos, categorias, promoções) | **Text-to-SQL restrito** (`consultar_catalogo`) | Perguntas de catálogo são muito variadas ("violões até R$ 1000", "guitarras com captação humbucker", "o mais barato em promoção"). SQL cobre todas sem eu precisar prever cada filtro. |
 | Pedidos e clientes | **Função fixa** (`consultar_pedido`) | Envolve dados pessoais. Não faz sentido o LLM gerar SQL livre sobre a tabela de clientes. |
 
