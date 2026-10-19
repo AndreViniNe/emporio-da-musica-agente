@@ -7,6 +7,7 @@ Protótipo de agente de atendimento por mensagens de texto para a **Empório da 
 ---
 
 ## Sumário
+
 - [Como rodar](#como-rodar)
 - [Arquitetura](#arquitetura)
 - [Decisões técnicas](#decisões-técnicas)
@@ -19,10 +20,10 @@ Protótipo de agente de atendimento por mensagens de texto para a **Empório da 
 
 ## Como rodar
 
-**Requisitos:** Python 3.10+ e uma chave de algum provedor com API compatível com OpenAI (padrão: Hugging Face Inference Providers).
+**Requisitos:** Python 3.10+ e uma chave de algum provedor com API compatível com OpenAI (testado com **Groq**, plano gratuito — veja abaixo como criar a chave).
 
 ```bash
-git clone <URL_DO_REPOSITORIO>
+git clone https://github.com/AndreViniNe/emporio-da-musica-agente.git
 cd <pasta>
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -35,28 +36,29 @@ python main.py          # ou: python main.py --debug  (mostra as consultas feita
 
 Configurado só pelo `.env` — o código não muda:
 
-| Provedor | `LLM_BASE_URL` | `LLM_MODEL` (exemplo) | Chave |
-|---|---|---|---|
-| Hugging Face (padrão) | `https://router.huggingface.co/v1` | `openai/gpt-oss-120b` | [token HF](https://huggingface.co/settings/tokens) com permissão de Inference Providers |
-| Groq | `https://api.groq.com/openai/v1` | `openai/gpt-oss-120b` | [console.groq.com](https://console.groq.com) |
-| Ollama (local) | `http://localhost:11434/v1` | `qwen2.5:7b` | qualquer valor (ex.: `ollama`) |
+| Provedor              | `LLM_BASE_URL`                     | `LLM_MODEL` (exemplo) | Chave                                                                                   |
+| --------------------- | ---------------------------------- | --------------------- | --------------------------------------------------------------------------------------- |
+| Groq (**testado, padrão do `.env.example`**) | `https://api.groq.com/openai/v1`   | `openai/gpt-oss-120b` | [console.groq.com](https://console.groq.com)                                            |
+| Hugging Face          | `https://router.huggingface.co/v1` | `openai/gpt-oss-120b` | [token HF](https://huggingface.co/settings/tokens) com permissão de Inference Providers |
+| Ollama (local)        | `http://localhost:11434/v1`        | `qwen2.5:7b`          | qualquer valor (ex.: `ollama`)                                                          |
 
 `DATA_REFERENCIA=AAAA-MM-DD` (opcional) fixa a "data de hoje" do agente — útil para reproduzir cenários de prazo de devolução, já que os pedidos da base vão de out/2025 a mar/2026.
 
 ### Comandos da CLI
 
-| Comando | Ação |
-|---|---|
-| `/novo` | inicia nova conversa |
+| Comando          | Ação                                                                    |
+| ---------------- | ----------------------------------------------------------------------- |
+| `/novo`          | inicia nova conversa                                                    |
 | `/salvar [nome]` | exporta a conversa para `conversas/<nome>.md` (com as consultas feitas) |
-| `/debug` | liga/desliga exibição das chamadas de ferramenta |
-| `/sair` | encerra |
+| `/debug`         | liga/desliga exibição das chamadas de ferramenta                        |
+| `/sair`          | encerra                                                                 |
 
 ### Testes
 
 ```bash
 pytest -q
 ```
+
 Os testes cobrem as ferramentas (busca, preços, bloqueios de SQL, verificação de identidade) e o loop do agente com um LLM falso — **não precisam de chave de API**.
 
 ---
@@ -98,25 +100,28 @@ tests/
 
 O enunciado pede que o agente saiba **quando consultar dados e quando consultar políticas**. Cada fonte recebeu o mecanismo mais simples que resolve bem:
 
-| Fonte | Mecanismo | Por quê |
-|---|---|---|
-| Manual de políticas (8 páginas, 10 seções) | **Ferramenta `consultar_politicas(temas)`**: devolve seções inteiras do manual a partir de um índice fixo de temas | A primeira versão mandava o manual inteiro no system prompt, mas isso dobrava o tamanho de *toda* chamada ao LLM (~19 mil caracteres com as ferramentas) e estourava o limite de tokens/minuto de planos gratuitos (Groq: 8 mil TPM) já na segunda chamada de uma pergunta. Com a ferramenta, cada chamada leva cerca de metade. Não usei RAG com embeddings: o manual tem seções bem delimitadas, então um índice fixo é mais previsível e não tem risco de *recuperar o trecho errado*; o modelo pode pedir vários temas numa chamada só. As regras aplicadas o tempo todo (PIX não acumula com promoção, parcelas mínimas, contato e horário) continuam no prompt, então não dependem de o modelo lembrar de consultar. |
-| Catálogo (produtos, categorias, promoções) | **Text-to-SQL restrito** (`consultar_catalogo`) | Perguntas de catálogo são muito variadas ("violões até R$ 1000", "guitarras com captação humbucker", "o mais barato em promoção"). SQL cobre todas sem eu precisar prever cada filtro. |
-| Pedidos e clientes | **Função fixa** (`consultar_pedido`) | Envolve dados pessoais. Não faz sentido o LLM gerar SQL livre sobre a tabela de clientes. |
+| Fonte                                      | Mecanismo                                                                                                          | Por quê                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Manual de políticas (8 páginas, 10 seções) | **Ferramenta `consultar_politicas(temas)`**: devolve seções inteiras do manual a partir de um índice fixo de temas | A primeira versão mandava o manual inteiro no system prompt, mas isso dobrava o tamanho de _toda_ chamada ao LLM (~19 mil caracteres com as ferramentas) e estourava o limite de tokens/minuto de planos gratuitos (Groq: 8 mil TPM) já na segunda chamada de uma pergunta. Com a ferramenta, cada chamada leva cerca de metade. Não usei RAG com embeddings: o manual tem seções bem delimitadas, então um índice fixo é mais previsível e não tem risco de _recuperar o trecho errado_; o modelo pode pedir vários temas numa chamada só. As regras aplicadas o tempo todo (PIX não acumula com promoção, parcelas mínimas, contato e horário) continuam no prompt, então não dependem de o modelo lembrar de consultar. |
+| Catálogo (produtos, categorias, promoções) | **Text-to-SQL restrito** (`consultar_catalogo`)                                                                    | Perguntas de catálogo são muito variadas ("violões até R$ 1000", "guitarras com captação humbucker", "o mais barato em promoção"). SQL cobre todas sem eu precisar prever cada filtro.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Pedidos e clientes                         | **Função fixa** (`consultar_pedido`)                                                                               | Envolve dados pessoais. Não faz sentido o LLM gerar SQL livre sobre a tabela de clientes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 
 **Como o text-to-SQL foi restringido**
+
 - O LLM só enxerga duas **views** (`catalogo`, `categorias`) com os joins já feitos, nomes de colunas em português, preço promocional e preço PIX **pré-calculados** e situação traduzida (`disponivel`/`esgotado`/`descontinuado`/`em breve`). Menos joins e menos aritmética para o modelo = menos erro, especialmente com modelos abertos.
 - Uma coluna `busca` (nome + categoria + descrição + specs, minúsculo e sem acento) torna a busca tolerante: "violao takamine gd20" encontra "Takamine GD20 Dreadnought Natural".
-- **Allow-list no próprio SQLite** (`set_authorizer`): só `SELECT`, só leitura das views (as tabelas brutas só podem ser lidas *através* delas), só funções permitidas. `customers`/`orders`, `INSERT`/`UPDATE`/`DELETE`, `PRAGMA`, `ATTACH`, `load_extension` e múltiplos comandos são bloqueados — validado em `tests/test_tools.py`. Também há limite de linhas e de passos de execução.
+- **Allow-list no próprio SQLite** (`set_authorizer`): só `SELECT`, só leitura das views (as tabelas brutas só podem ser lidas _através_ delas), só funções permitidas. `customers`/`orders`, `INSERT`/`UPDATE`/`DELETE`, `PRAGMA`, `ATTACH`, `load_extension` e múltiplos comandos são bloqueados — validado em `tests/test_tools.py`. Também há limite de linhas e de passos de execução.
 
 **Consulta de pedidos (LGPD):** exige nº do pedido **e** e-mail ou telefone cadastrado. A resposta tem a mesma mensagem para "pedido não existe" e "dados não conferem" (evita enumeração) e não devolve e-mail/telefone, só o primeiro nome.
 
 **O que é calculado em código e não pelo LLM:** se a loja está aberta agora (dia/hora em `America/Campo_Grande`), preço promocional, preço PIX (sem acumular com promoção), dias desde o pedido/previsão de entrega. LLMs erram com frequência datas e contas; tirar isso deles aumenta a confiabilidade.
 
 ### Framework: nenhum (SDK `openai` + loop próprio)
+
 O loop de tool calling tem ~60 linhas (`emporio/agent.py`). Um framework (LangChain, LlamaIndex) adicionaria abstrações sem ganho real nesse escopo e dificultaria depurar o que vai para o modelo. O SDK `openai` é usado apenas como cliente do protocolo, que hoje é o padrão de fato — por isso o mesmo código roda com Hugging Face, Groq, Ollama ou OpenAI.
 
 ### Modelo e provedor: `gpt-oss-120b` (open-weight) via Groq
+
 - **Open-weight** (Apache 2.0, pesos no Hugging Face): sem dependência de fornecedor fechado; pode ser auto-hospedado.
 - Bom em **function calling** e em português, que são os dois requisitos críticos do agente.
 - **Provedor:** comecei pelo Hugging Face Inference Providers, mas os créditos gratuitos acabaram durante os testes; os exemplos de `conversas/` foram gerados no **Groq** (plano gratuito, mesmo modelo). Trocar de provedor é só mudar o `.env`.
@@ -124,6 +129,7 @@ O loop de tool calling tem ~60 linhas (`emporio/agent.py`). Um framework (LangCh
 - Modelos pequenos (7–8B) rodam localmente, mas erram mais a escolha de ferramenta e o SQL — por isso não são o padrão.
 
 ### Estratégia de prompt
+
 - **Persona** (Lia) e **tom de voz** tirados da seção 7.1 do manual: informal mas profissional, mensagens curtas estilo WhatsApp.
 - **Roteamento explícito**: o prompt diz qual fonte responde cada tipo de pergunta e proíbe informar preço/estoque sem consultar a ferramenta (regra do próprio manual, 7.1).
 - **Regras de negócio** transformadas em instruções verificáveis: mostrar preço original + % + preço final em promoções; PIX não acumula; parcelas mínimas; sugerir alternativas para esgotado/descontinuado; redirecionar acessórios; recusar fora do escopo; encaminhar reclamações (24h úteis).
@@ -131,9 +137,11 @@ O loop de tool calling tem ~60 linhas (`emporio/agent.py`). Um framework (LangCh
 - Temperatura baixa (0,2) para respostas consistentes.
 
 ### Interface: CLI
+
 O foco é o agente. A CLI tem `/debug` para mostrar as consultas feitas (útil na avaliação) e `/salvar` para exportar conversas em Markdown — os exemplos em `conversas/` foram gerados assim.
 
 ### Histórico de conversa
+
 Mantido **em memória** durante a sessão (janela dos últimos 20 turnos, cortando sempre em uma mensagem do usuário para não separar uma chamada de ferramenta do seu resultado). Isso permite perguntas de acompanhamento ("e no PIX?", "tem em outra cor?"). Persistência entre sessões não foi implementada: para atendimento real ela ficaria no canal (ex.: WhatsApp, por número de telefone) — ver próximos passos.
 
 ---
@@ -148,13 +156,13 @@ Mantido **em memória** durante a sessão (janela dos últimos 20 turnos, cortan
 
 **Inconsistências encontradas no manual e decisão tomada:**
 
-| Inconsistência | Decisão |
-|---|---|
-| Telefone/WhatsApp `(67) 3341-4444` (seção 1.2) × WhatsApp `(67) 3321-4500` (seção 7) | Telefone = 3341-4444; WhatsApp de atendimento = 3321-4500 |
-| E-mail com acento (`empóriodamusica`) na seção 1.2 × sem acento na capa | `contato@emporiodamusica.com.br` (domínios com acento são incomuns; provável erro de digitação) |
+| Inconsistência                                                                           | Decisão                                                                                                                     |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Telefone/WhatsApp `(67) 3341-4444` (seção 1.2) × WhatsApp `(67) 3321-4500` (seção 7)     | Telefone = 3341-4444; WhatsApp de atendimento = 3321-4500                                                                   |
+| E-mail com acento (`empóriodamusica`) na seção 1.2 × sem acento na capa                  | `contato@emporiodamusica.com.br` (domínios com acento são incomuns; provável erro de digitação)                             |
 | Tabela diz "parcela mínima R$ 100" no crédito × seção 3.1 com faixas (3x / 4–6x / 7–12x) | Regras detalhadas da 3.1 prevalecem; "até 3x sem mínimo (exceto abaixo de R$ 50)" interpretado como parcela mínima de R$ 50 |
-| Data de recebimento do pedido não existe na base | Usa a previsão de entrega como referência para prazos de arrependimento/troca e avisa o cliente que a equipe confirmará |
-| "Feriados" sem calendário | O agente informa que a loja fecha em feriados, sem calcular quais são |
+| Data de recebimento do pedido não existe na base                                         | Usa a previsão de entrega como referência para prazos de arrependimento/troca e avisa o cliente que a equipe confirmará     |
+| "Feriados" sem calendário                                                                | O agente informa que a loja fecha em feriados, sem calcular quais são                                                       |
 
 ---
 
@@ -162,17 +170,15 @@ Mantido **em memória** durante a sessão (janela dos últimos 20 turnos, cortan
 
 Em [`conversas/`](conversas/), gerados com `/salvar` (modelo `openai/gpt-oss-120b` via Groq, `DATA_REFERENCIA=2026-03-25`). Cada arquivo mostra as ferramentas chamadas e o que retornaram.
 
-| # | Conversa | O que testa | Ferramentas | Resultado |
-|---|---|---|---|---|
-| 1 | [violoes_1000_reais.md](conversas/violoes_1000_reais.md) | Catálogo com filtro de categoria, preço e disponibilidade | `consultar_catalogo` | ✅ 12 violões disponíveis, ordenados por preço, com valor no PIX |
-| 2 | [preco_promocao_parcelamento.md](conversas/preco_promocao_parcelamento.md) | Promoção ativa, PIX que não acumula, parcelas mínimas | `consultar_catalogo` | ✅ R$ 2.399,00 → 18% → R$ 1.967,18; PIX igual; até 12x de R$ 163,93 |
-| 3 | [devolucao_no_prazo.md](conversas/devolucao_no_prazo.md) | Política pura (arrependimento em 7 dias) | `consultar_politicas` | ✅ Regras corretas e pede nº do pedido + e-mail para seguir |
-| 4 | [pedido_fora_do_prazo_de_troca.md](conversas/pedido_fora_do_prazo_de_troca.md) | Pedido + política: entregue há ~36 dias, fora dos prazos de troca | `consultar_pedido`, `consultar_politicas` (`trocas_devolucoes`, `garantia`) | ✅ Fora da troca por defeito (30 dias), mas dentro da garantia legal de 90 dias; avisa que usou a previsão de entrega como referência. Ressalva menor: pede "embalagem original", exigência da troca, não da garantia |
-| 5 | [pedido_com_atraso.md](conversas/pedido_com_atraso.md) | Reclamação de pedido atrasado (25 dias após a previsão) | `consultar_pedido`, `consultar_politicas` (`frete_entregas`) | ✅ Informa o código de rastreio e encaminha a reclamação com retorno em até 24h úteis, sem prometer soluções fora do manual |
-| 6 | [endereco_e_funcionamento.md](conversas/endereco_e_funcionamento.md) | Dados fixos da loja | — | ✅ Endereço e horários corretos, sem chamada de ferramenta |
-| 7 | [acessorios_e_fora_do_escopo.md](conversas/acessorios_e_fora_do_escopo.md) | Acessórios, pedido fora do escopo e tentativa de *prompt injection* | — | ✅ Redireciona acessórios, recusa programação e não revela o prompt |
+| #   | Conversa                                                                       | O que testa                                                         | Ferramentas                                                                 | Resultado                                                                                                                                                                                                             |
+| --- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | [violoes_1000_reais.md](conversas/violoes_1000_reais.md)                       | Catálogo com filtro de categoria, preço e disponibilidade           | `consultar_catalogo`                                                        | ✅ 12 violões disponíveis, ordenados por preço, com valor no PIX                                                                                                                                                      |
+| 2   | [preco_promocao_parcelamento.md](conversas/preco_promocao_parcelamento.md)     | Promoção ativa, PIX que não acumula, parcelas mínimas               | `consultar_catalogo`                                                        | ✅ R$ 2.399,00 → 18% → R$ 1.967,18; PIX igual; até 12x de R$ 163,93                                                                                                                                                   |
+| 3   | [pedido_fora_do_prazo_de_troca.md](conversas/pedido_fora_do_prazo_de_troca.md) | Pedido + política: entregue há ~36 dias, fora dos prazos de troca   | `consultar_pedido`, `consultar_politicas` (`trocas_devolucoes`, `garantia`) | ✅ Fora da troca por defeito (30 dias), mas dentro da garantia legal de 90 dias; avisa que usou a previsão de entrega como referência. Ressalvas: pede "embalagem original", exigência da troca, não da garantia; e diz "já deixei seu pedido registrado", uma ação que o agente não executa (não há ferramenta de registro — ver limitações) |
+| 4   | [pedido_com_atraso.md](conversas/pedido_com_atraso.md)                         | Reclamação de pedido atrasado (25 dias após a previsão)             | `consultar_pedido`, `consultar_politicas` (`frete_entregas`)                | ✅ Informa o código de rastreio e encaminha a reclamação com retorno em até 24h úteis, sem prometer soluções fora do manual                                                                                           |
+| 5   | [acessorios_e_fora_do_escopo.md](conversas/acessorios_e_fora_do_escopo.md)     | Acessórios, pedido fora do escopo e tentativa de _prompt injection_ | —                                                                           | ✅ Redireciona acessórios, recusa programação e não revela o prompt                                                                                                                                                   |
 
-Na primeira rodada, as conversas 4 e 5 expuseram o principal risco do agente: **completar com conhecimento geral quando a política não cobre o caso**. Na 4, chamou a garantia legal de "garantia do fabricante" sem consultar o tema `garantia`; na 5, ofereceu reenvio grátis e reembolso (que não estão no manual) e não informou o rastreio. Corrigi com regras explícitas no prompt (atraso de entrega → encaminhar + rastreio; dúvidas de garantia → consultar `garantia`) e regerei as duas. Esses cenários são os primeiros candidatos para a avaliação automatizada (ver abaixo).
+Na primeira rodada, as conversas 3 e 4 expuseram o principal risco do agente: **completar com conhecimento geral quando a política não cobre o caso**. Na 3, chamou a garantia legal de "garantia do fabricante" sem consultar o tema `garantia`; na 4, ofereceu reenvio grátis e reembolso (que não estão no manual) e não informou o rastreio. Corrigi com regras explícitas no prompt (atraso de entrega → encaminhar + rastreio; dúvidas de garantia → consultar `garantia`) e regerei as duas. Esses cenários são os primeiros candidatos para a avaliação automatizada (ver abaixo).
 
 ---
 
@@ -192,11 +198,13 @@ Na primeira rodada, as conversas 4 e 5 expuseram o principal risco do agente: **
 ## Uso de assistentes de código
 
 Usei o **Claude** (Anthropic) como par de programação:
+
 - discussão inicial da arquitetura (text-to-SQL puro × híbrido), em que surgiram as preocupações com LGPD e com a tabela de clientes;
 - leitura dos dados para encontrar armadilhas (produtos esgotados/descontinuados, promoções inativas, categorias vazias, inconsistências no manual);
 - geração do esqueleto do código, dos testes e do rascunho deste README, que revisei e ajustei.
 
 O que fiz além da geração de código:
+
 - **Rodei o agente de ponta a ponta** com o modelo real e salvei as conversas de `conversas/`, escolhendo cenários a partir dos dados (pedido entregue fora do prazo de troca, pedido atrasado, produto em promoção) e conferindo cada resposta contra a base e o manual — inclusive registrando acima as respostas que saíram erradas.
 - **Problemas que só apareceram na execução real** e mudaram o projeto: os testes não importavam o pacote (faltava `pytest.ini`), os créditos do Hugging Face acabaram (troca para o Groq) e o limite de 8 mil tokens/min do Groq estourava em perguntas com ferramenta. Isso levou a trocar "manual inteiro no prompt" pela ferramenta `consultar_politicas` e a aumentar as tentativas em caso de 429.
 - Revisei os diffs e organizei os commits.

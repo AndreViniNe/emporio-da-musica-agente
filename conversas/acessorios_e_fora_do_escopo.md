@@ -1,4 +1,4 @@
-# Acessorioes e fora do escopo
+# Acessorios e fora do escopo
 
 _Modelo: `openai/gpt-oss-120b`_
 
