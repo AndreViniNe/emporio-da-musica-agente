@@ -193,7 +193,7 @@ TEMAS_POLITICA: dict[str, tuple[int, str]] = {
     "frete_entregas": (5, "frete em Campo Grande e outras cidades, prazos, transportadoras, seguro, avaria, rastreio"),
     "promocoes": (6, "campanhas do ano (Black Friday etc.), cumulatividade, rain check"),
     "atendimento": (7, "diretrizes do WhatsApp, fluxo de atendimento, produto esgotado/descontinuado, reclamações"),
-    "garantia": (8, "garantia legal (90 dias), garantia do fabricante, o que não é coberto"),
+    "garantia": (8, "tipos de garantia (legal de 90 dias, do fabricante), o que não é coberto"),
     "privacidade": (9, "LGPD, uso e exclusão de dados pessoais"),
     "disposicoes_finais": (10, "uso do manual, quando consultar a gerência"),
 }
