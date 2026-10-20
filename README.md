@@ -191,7 +191,32 @@ Na primeira rodada, as conversas 3 e 4 expuseram o principal risco do agente: **
 - **Verificação de identidade simples** (e-mail/telefone): em produção, adicionar limite de tentativas e/ou código por SMS/WhatsApp.
 - **Prompt injection:** há guardrails no prompt e o SQL é restrito a leitura do catálogo (o pior caso é ler dados públicos), mas não há classificador dedicado.
 - **Índice fixo de temas do manual** funciona bem com um documento de 10 seções; com dezenas de documentos, trocar por RAG (chunking por seção + busca híbrida).
-- **Interface:** com mais tempo, integração com WhatsApp (Twilio/Meta Cloud API) ou uma UI simples (Streamlit/Gradio) e streaming das respostas.
+- **Interface:** hoje o uso é só pelo terminal. O próximo passo é transformar o protótipo em uma aplicação (detalhado abaixo).
+
+### Próximo passo: de CLI para aplicação web
+
+O núcleo do agente continua em Python (`emporio/`, sem mudanças de lógica); o que muda é como ele é exposto e consumido:
+
+```
+Next.js (chat do cliente + painel da equipe)
+   │  HTTPS / SSE (streaming)
+   ▼
+NestJS (API gateway: auth, sessões, histórico, rate limit, webhook do WhatsApp)
+   │  HTTP interno                    │
+   ▼                                  ▼
+Serviço do agente (Python/FastAPI)   PostgreSQL (conversas, tickets, catálogo)
+```
+
+| Camada | Stack | Responsabilidade |
+|---|---|---|
+| **Frontend** | **Next.js** (App Router, TypeScript, Tailwind) | Widget de chat para o cliente com respostas em streaming; painel interno para a equipe acompanhar conversas, assumir o atendimento (*handoff*) e ver reclamações encaminhadas. |
+| **Backend** | **NestJS** (TypeScript) | Autenticação da equipe, sessões de conversa e **persistência do histórico** (resolve a limitação de memória só em sessão), rate limiting por cliente, endpoint de *webhook* para WhatsApp (Meta Cloud API) e a ferramenta `registrar_atendimento`, que vira um ticket real. Repassa as mensagens ao serviço do agente. |
+| **Agente** | **Python + FastAPI** | Envolve o `AgenteAtendimento` atual em uma API (`POST /chat` com streaming via SSE). Continua stateless: recebe o histórico do NestJS a cada chamada, o que facilita escalar horizontalmente. |
+| **Dados** | **PostgreSQL** | Substitui os CSVs e o SQLite em memória como fonte do catálogo e dos pedidos. As views `catalogo`/`categorias` são mantidas, e o usuário de banco do agente recebe permissão **somente de leitura** nelas, reforçando no banco a mesma restrição que hoje é feita no `set_authorizer`. |
+| **Infra** | **Git + Docker / Docker Compose** | Um `Dockerfile` por serviço e um `docker-compose.yml` que sobe tudo localmente com um comando; CI no GitHub Actions rodando os testes (`pytest` e Jest) e o build das imagens a cada push. |
+| **Cloud** | Ex.: **Google Cloud Run** (ou AWS ECS/Fargate) + Postgres gerenciado (Cloud SQL/RDS) | Containers serverless que escalam a zero fora do horário da loja (o tráfego é concentrado no expediente), segredos (chave do LLM) em um secret manager e frontend na Vercel ou no mesmo Cloud Run. |
+
+Por que separar o agente em um serviço Python em vez de reescrevê-lo em TypeScript: o ecossistema de LLM/avaliação é mais maduro em Python, e o desafio exige Python como linguagem principal. O NestJS fica com o que é regra de aplicação (usuários, sessões, integrações), e o agente pode ser versionado, testado e trocado de modelo sem mexer no restante.
 
 ---
 
